@@ -134,6 +134,11 @@ class ControlPanel:
             "成功解析温度快照": 60.0,  # 改为60秒，大幅减少刷屏
             "成功获取全分辨率温度矩阵": 60.0,  # 改为60秒，大幅减少刷屏
         }
+
+        # 错误去重相关变量
+        self._last_error_message = None  # 上一条错误消息
+        self._last_error_count = 0       # 重复错误计数
+        self._last_error_timestamp = None  # 最后错误时间戳
     
     def _init_ui(self):
         """初始化UI布局"""
@@ -196,26 +201,67 @@ class ControlPanel:
             # 初始化调试输出控制变量
             self.debug_paused = False
 
-        # 开始/停止按钮
-        self.start_button = ttk.Button(
-            main_control,
-            text="开始调控",
-            command=self._toggle_monitoring
+        # 主操作按钮区域（第一行）
+        main_buttons_frame = ttk.Frame(main_control)
+        main_buttons_frame.pack(side=tk.LEFT, padx=5)
+        
+        # 开始/停止按钮 - 使用tk.Button支持背景色
+        self.start_button = tk.Button(
+            main_buttons_frame,
+            text="开始监控",
+            command=self._toggle_monitoring,
+            bg="#4CAF50",  # 绿色
+            fg="white",
+            activebackground="#45a049",
+            activeforeground="white",
+            relief=tk.RAISED,
+            bd=2,
+            padx=10,
+            pady=2
         )
         self.start_button.pack(side=tk.LEFT, padx=5)
         
-        # 手动捕获按钮
-        self.capture_button = ttk.Button(
-            main_control,
+        # 停止监控按钮 - 使用tk.Button支持背景色
+        self.stop_button = tk.Button(
+            main_buttons_frame,
+            text="停止监控",
+            command=self._stop_monitoring,
+            bg="#f44336",  # 红色
+            fg="white",
+            activebackground="#da190b",
+            activeforeground="white",
+            relief=tk.RAISED,
+            bd=2,
+            padx=10,
+            pady=2,
+            state=tk.DISABLED
+        )
+        self.stop_button.pack(side=tk.LEFT, padx=5)
+        
+        # 手动捕获按钮 - 使用tk.Button支持背景色
+        self.capture_button = tk.Button(
+            main_buttons_frame,
             text="手动捕获",
             command=self._capture_images,
+            bg="#2196F3",  # 蓝色
+            fg="white",
+            activebackground="#0b7dda",
+            activeforeground="white",
+            relief=tk.RAISED,
+            bd=2,
+            padx=10,
+            pady=2,
             state=tk.DISABLED
         )
         self.capture_button.pack(side=tk.LEFT, padx=5)
         
+        # 次要操作按钮区域（第二行）
+        secondary_buttons_frame = ttk.Frame(main_control)
+        secondary_buttons_frame.pack(side=tk.LEFT, padx=5)
+        
         # 摄像头调试按钮
         self.debug_button = ttk.Button(
-            main_control,
+            secondary_buttons_frame,
             text="开启摄像头调试",
             command=self._toggle_camera_debug
         )
@@ -227,28 +273,39 @@ class ControlPanel:
         
         ttk.Label(recording_frame, text="数据记录:").pack(side=tk.LEFT, padx=(0, 10))
         
-        # 开始记录按钮
-        self.start_recording_button = ttk.Button(
-            recording_frame,
-            text="开始记录",
-            command=self._start_recording
-        )
-        self.start_recording_button.pack(side=tk.LEFT, padx=5)
+        # 记录控制按钮区域
+        recording_buttons_frame = ttk.Frame(recording_frame)
+        recording_buttons_frame.pack(side=tk.LEFT)
         
-        # 暂停记录按钮
-        self.pause_recording_button = ttk.Button(
-            recording_frame,
-            text="暂停记录",
-            command=self._pause_recording,
-            state=tk.DISABLED
+        # 开始/暂停/继续 切换按钮 - 使用tk.Button支持背景色
+        self.toggle_recording_button = tk.Button(
+            recording_buttons_frame,
+            text="▶ 开始记录",
+            command=self._toggle_recording,
+            bg="#4CAF50",  # 绿色
+            fg="white",
+            activebackground="#45a049",
+            activeforeground="white",
+            relief=tk.RAISED,
+            bd=2,
+            padx=10,
+            pady=2
         )
-        self.pause_recording_button.pack(side=tk.LEFT, padx=5)
+        self.toggle_recording_button.pack(side=tk.LEFT, padx=5)
         
-        # 结束记录按钮
-        self.stop_recording_button = ttk.Button(
-            recording_frame,
-            text="结束记录",
+        # 结束记录按钮 - 使用tk.Button支持背景色
+        self.stop_recording_button = tk.Button(
+            recording_buttons_frame,
+            text="⏹ 结束记录",
             command=self._stop_recording,
+            bg="#f44336",  # 红色
+            fg="white",
+            activebackground="#da190b",
+            activeforeground="white",
+            relief=tk.RAISED,
+            bd=2,
+            padx=10,
+            pady=2,
             state=tk.DISABLED
         )
         self.stop_recording_button.pack(side=tk.LEFT, padx=5)
@@ -306,16 +363,15 @@ class ControlPanel:
         
         ttk.Label(threshold_frame, text="振动阈值:").pack(side=tk.LEFT)
         
-        # 阈值输入框
-        self.threshold_var = tk.DoubleVar(value=self.motion_threshold)
-        self.threshold_entry = ttk.Entry(threshold_frame, textvariable=self.threshold_var, width=8)
-        self.threshold_entry.pack(side=tk.LEFT, padx=5)
-        self.threshold_entry.bind('<KeyRelease>', self._on_threshold_change)
-        
         # 阈值滑块
+        self.threshold_var = tk.DoubleVar(value=self.motion_threshold)
         self.threshold_scale = ttk.Scale(threshold_frame, from_=0.01, to=10, orient=tk.HORIZONTAL, 
                                         variable=self.threshold_var, command=self._on_threshold_scale_change)
         self.threshold_scale.pack(side=tk.LEFT, padx=10, fill=tk.X, expand=True)
+        
+        # 阈值数值显示标签
+        self.threshold_value_label = ttk.Label(threshold_frame, text=f"{self.motion_threshold:.2f}", font=("Arial", 9, "bold"), width=6)
+        self.threshold_value_label.pack(side=tk.LEFT, padx=(0, 10))
         
         # 快捷设置按钮
         ttk.Button(threshold_frame, text="敏感", command=lambda: self._set_threshold(0.1)).pack(side=tk.RIGHT, padx=2)
@@ -614,13 +670,18 @@ class ControlPanel:
         })
     
     def add_debug_log(self, message):
-        """添加调试日志信息（带节流和过滤）"""
+        """添加调试日志信息（带节流、过滤和错误去重）"""
         if not hasattr(self, 'vibration_debug_text'):
             return
-            
+        
         # 对界面调试输出应用节流机制和暂停控制
         should_show = self._should_show_in_debug_panel(message)
         if not should_show:
+            return
+        
+        # 错误去重处理
+        message = self._deduplicate_error(message)
+        if message is None:  # 如果是重复错误且已合并，不显示
             return
             
         timestamp = datetime.now().strftime("%H:%M:%S")
@@ -636,6 +697,82 @@ class ControlPanel:
             # 保留最新的25行
             self.vibration_debug_text.delete(1.0, tk.END)
             self.vibration_debug_text.insert(1.0, '\n'.join(lines[-25:]))
+    
+    def _deduplicate_error(self, message):
+        """错误消息去重处理
+        
+        Args:
+            message: 原始消息
+            
+        Returns:
+            str: 处理后的消息，如果为None表示不显示（已合并到上一条）
+        """
+        import time
+        
+        # 定义需要合并的错误模式
+        error_patterns = [
+            "数据读取失败",
+            "振动检测错误",
+            "连接超时",
+            "设备未响应",
+        ]
+        
+        # 检查是否是错误消息
+        is_error = any(pattern in message for pattern in error_patterns)
+        
+        if not is_error:
+            # 非错误消息，重置错误计数并正常显示
+            if self._last_error_message is not None:
+                self._last_error_message = None
+                self._last_error_count = 0
+                self._last_error_timestamp = None
+            return message
+        
+        # 是错误消息，检查是否与上一条相同
+        current_time = time.time()
+        
+        if self._last_error_message == message:
+            # 相同错误，增加计数
+            self._last_error_count += 1
+            self._last_error_timestamp = current_time
+            # 更新上一条消息的显示，添加计数
+            return None  # 不显示新消息，而是更新上一条
+        else:
+            # 不同错误或第一条错误
+            # 如果有之前的重复错误，先显示合并结果
+            if self._last_error_count > 1:
+                # 更新上一条消息，添加计数信息
+                self._update_last_error_with_count()
+            
+            # 记录新错误
+            self._last_error_message = message
+            self._last_error_count = 1
+            self._last_error_timestamp = current_time
+            return message
+    
+    def _update_last_error_with_count(self):
+        """更新最后一条错误消息，添加重复计数"""
+        try:
+            # 获取所有文本
+            all_text = self.vibration_debug_text.get(1.0, tk.END)
+            lines = all_text.split('\n')
+            
+            if len(lines) >= 2:
+                # 找到最后一条非空行
+                for i in range(len(lines) - 1, -1, -1):
+                    if lines[i].strip():
+                        # 检查是否已经包含计数
+                        if "(重复" not in lines[i]:
+                            # 添加计数信息
+                            lines[i] = f"{lines[i]} (重复 {self._last_error_count}次)"
+                            # 更新文本
+                            new_text = '\n'.join(lines)
+                            self.vibration_debug_text.delete(1.0, tk.END)
+                            self.vibration_debug_text.insert(1.0, new_text)
+                            self.vibration_debug_text.see(tk.END)
+                        break
+        except Exception:
+            pass  # 忽略更新错误
     
     def _should_show_in_debug_panel(self, message):
         """判断是否在调试面板中显示该消息（重要信息过滤）"""
@@ -705,7 +842,7 @@ class ControlPanel:
         return False
     
     def _toggle_monitoring(self):
-        """切换监控状态"""
+        """切换监控状态（开始监控）"""
         if not self.monitoring:
             # 检查设备状态
             if not self._check_devices():
@@ -717,14 +854,19 @@ class ControlPanel:
             
             # 启动监控
             self.monitoring = True
-            self.start_button.config(text="停止监控")
+            self.start_button.config(state=tk.DISABLED)  # 禁用开始按钮
+            self.stop_button.config(state=tk.NORMAL)     # 启用停止按钮
             self.capture_button.config(state=tk.NORMAL)
             self.start_callback()
             self._log("开始监控")
-        else:
+    
+    def _stop_monitoring(self):
+        """停止监控"""
+        if self.monitoring:
             # 停止监控
             self.monitoring = False
-            self.start_button.config(text="开始监控")
+            self.start_button.config(state=tk.NORMAL)     # 启用开始按钮
+            self.stop_button.config(state=tk.DISABLED)    # 禁用停止按钮
             self.capture_button.config(state=tk.DISABLED)
             self.stop_callback()
             self._log("停止监控")
@@ -865,6 +1007,15 @@ class ControlPanel:
         except Exception:
             pass  # 文件不存在或格式错误时使用默认值
 
+    def _toggle_recording(self):
+        """切换记录状态（开始/暂停/继续）"""
+        if not self.recording:
+            # 开始记录
+            self._start_recording()
+        else:
+            # 暂停或继续记录
+            self._pause_recording()
+    
     def _start_recording(self):
         """开始基于振动检测的记录"""
         if self.recording:
@@ -889,7 +1040,7 @@ class ControlPanel:
             return
         
         # 立即禁用按钮，显示正在启动状态
-        self.start_recording_button.config(state=tk.DISABLED)
+        self.toggle_recording_button.config(state=tk.DISABLED)
         self.recording_status.config(text="正在启动记录...")
         self._log("🚀 正在初始化记录系统...")
         
@@ -961,8 +1112,13 @@ class ControlPanel:
             # 初始化main_data记录列表
             self.main_data_records = []
             
-            # 更新UI
-            self.pause_recording_button.config(state=tk.NORMAL)
+            # 更新UI - 切换按钮显示为暂停
+            self.toggle_recording_button.config(
+                text="⏸ 暂停记录",
+                bg="#FF9800",  # 橙色
+                activebackground="#F57C00",
+                state=tk.NORMAL
+            )
             self.stop_recording_button.config(state=tk.NORMAL)
             self.recording_status.config(text=f"等待振动检测: 层{self.current_layer.get()}")
             
@@ -1040,8 +1196,12 @@ class ControlPanel:
         self._log(f"❌ {error_msg}")
         
         # 恢复按钮状态
-        self.start_recording_button.config(state=tk.NORMAL)
-        self.pause_recording_button.config(state=tk.DISABLED)
+        self.toggle_recording_button.config(
+            text="▶ 开始记录",
+            bg="#4CAF50",
+            activebackground="#45a049",
+            state=tk.NORMAL
+        )
         self.stop_recording_button.config(state=tk.DISABLED)
         self.recording_status.config(text="记录启动失败")
     
@@ -1788,6 +1948,9 @@ class ControlPanel:
         new_threshold = float(value)
         self.motion_threshold = new_threshold
         self.threshold_var.set(new_threshold)
+        # 实时更新阈值显示标签
+        if hasattr(self, 'threshold_value_label'):
+            self.threshold_value_label.config(text=f"{new_threshold:.2f}")
         # 同步到振动设备
         self._sync_threshold_to_device(new_threshold)
         # 不要过于频繁的日志输出
@@ -1796,6 +1959,9 @@ class ControlPanel:
         """设置阈值为指定值"""
         self.threshold_var.set(value)
         self.motion_threshold = value
+        # 实时更新阈值显示标签
+        if hasattr(self, 'threshold_value_label'):
+            self.threshold_value_label.config(text=f"{value:.2f}")
         # 同步到振动设备
         self._sync_threshold_to_device(value)
         self._log(f"振动阈值设置为: {value:.3f}")
@@ -2100,7 +2266,11 @@ class ControlPanel:
         if self.recording_paused:
             # 继续记录
             self.recording_paused = False
-            self.pause_recording_button.config(text="暂停记录")
+            self.toggle_recording_button.config(
+                text="⏸ 暂停记录",
+                bg="#FF9800",  # 橙色
+                activebackground="#F57C00"
+            )
             self._log("继续振动检测记录")
             
             # 重新开始振动监测
@@ -2108,7 +2278,11 @@ class ControlPanel:
         else:
             # 暂停记录
             self.recording_paused = True
-            self.pause_recording_button.config(text="继续记录")
+            self.toggle_recording_button.config(
+                text="▶ 继续记录",
+                bg="#4CAF50",  # 绿色
+                activebackground="#45a049"
+            )
             self._log("暂停振动检测记录")
             
             # 取消振动监测定时器
@@ -2141,8 +2315,12 @@ class ControlPanel:
         self.first_motion_start_time = 0
         
         # 更新UI
-        self.start_recording_button.config(state=tk.NORMAL)
-        self.pause_recording_button.config(state=tk.DISABLED, text="暂停记录")
+        self.toggle_recording_button.config(
+            text="▶ 开始记录",
+            bg="#4CAF50",  # 绿色
+            activebackground="#45a049",
+            state=tk.NORMAL
+        )
         self.stop_recording_button.config(state=tk.DISABLED)
         self.recording_status.config(text="未记录")
         

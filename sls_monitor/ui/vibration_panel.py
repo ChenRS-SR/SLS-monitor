@@ -25,12 +25,30 @@ class VibrationPanel:
         self.frame.configure(style='Bold.TLabelframe')
         # 不在这里设置grid，由父组件控制布局
         
+        # 检测设备连接状态
+        self.is_connected = self._check_connection()
+        
         self._create_status_panel()
         self._create_vibration_monitor()
         self._create_control_panel()
         
-        # 初始更新状态
-        self.update_status("就绪")
+        # 根据连接状态显示相应界面
+        if self.is_connected:
+            self._show_connected_state()
+            self.update_status("就绪")
+        else:
+            self._show_disconnected_state()
+            self.update_status("传感器未连接", "red")
+    
+    def _check_connection(self):
+        """检查传感器连接状态
+        
+        Returns:
+            bool: 是否已连接
+        """
+        if self.device and hasattr(self.device, 'isOpen'):
+            return self.device.isOpen
+        return False
     
     def _create_status_panel(self):
         """创建状态显示面板"""
@@ -58,11 +76,35 @@ class VibrationPanel:
     
     def _create_vibration_monitor(self):
         """创建振动监测显示区域"""
-        monitor_frame = ttk.Frame(self.frame)
-        monitor_frame.pack(fill="x", expand=True, pady=1)  # 减少间距
+        # 创建数值显示区域容器
+        self.monitor_container = ttk.Frame(self.frame)
+        self.monitor_container.pack(fill="x", expand=True, pady=1)  # 减少间距
+        
+        # 创建未连接提示区域（默认隐藏）
+        self.disconnected_frame = ttk.Frame(self.monitor_container)
+        
+        # 提示标签
+        self.disconnected_label = ttk.Label(
+            self.disconnected_frame,
+            text="传感器未连接 - 调试模式",
+            font=("Arial", 10, "bold"),
+            foreground="gray"
+        )
+        self.disconnected_label.pack(pady=10)
+        
+        # 连接传感器按钮
+        self.connect_button = ttk.Button(
+            self.disconnected_frame,
+            text="连接传感器",
+            command=self._connect_sensor
+        )
+        self.connect_button.pack(pady=5)
+        
+        # 创建数值显示区域（默认显示）
+        self.connected_frame = ttk.Frame(self.monitor_container)
         
         # 创建一行布局容纳实时数值和峰值记录
-        monitor_row = ttk.Frame(monitor_frame)
+        monitor_row = ttk.Frame(self.connected_frame)
         monitor_row.pack(fill="x", pady=(0, 1))  # 减少间距
         monitor_row.columnconfigure(0, weight=1)  # 实时数值列
         monitor_row.columnconfigure(1, weight=1)  # 峰值记录列
@@ -122,7 +164,7 @@ class VibrationPanel:
         peak_axes_frame.grid_columnconfigure(2, weight=1)
         
         # 综合强度显示
-        magnitude_frame = ttk.Frame(monitor_frame)
+        magnitude_frame = ttk.Frame(self.connected_frame)
         magnitude_frame.pack(fill="x", pady=1)  # 减小间距
         
         self.magnitude_label = ttk.Label(
@@ -140,6 +182,62 @@ class VibrationPanel:
             command=self._reset_peaks
         )
         self.reset_button.pack(side="right")
+    
+    def _show_disconnected_state(self):
+        """显示未连接状态（隐藏数值显示区域，显示提示）"""
+        self.connected_frame.pack_forget()
+        self.disconnected_frame.pack(fill="x", expand=True)
+        
+        # 禁用控制按钮
+        if hasattr(self, 'optimize_button'):
+            self.optimize_button.config(state="disabled")
+        if hasattr(self, 'calibrate_button'):
+            self.calibrate_button.config(state="disabled")
+        if hasattr(self, 'test_button'):
+            self.test_button.config(state="disabled")
+        if hasattr(self, 'reset_button'):
+            self.reset_button.config(state="disabled")
+    
+    def _show_connected_state(self):
+        """显示已连接状态（显示数值显示区域，隐藏提示）"""
+        self.disconnected_frame.pack_forget()
+        self.connected_frame.pack(fill="x", expand=True)
+        
+        # 启用控制按钮
+        if hasattr(self, 'optimize_button'):
+            self.optimize_button.config(state="normal")
+        if hasattr(self, 'calibrate_button'):
+            self.calibrate_button.config(state="normal")
+        if hasattr(self, 'test_button'):
+            self.test_button.config(state="normal")
+        if hasattr(self, 'reset_button'):
+            self.reset_button.config(state="normal")
+    
+    def _connect_sensor(self):
+        """连接传感器按钮回调"""
+        self.update_status("正在连接传感器...", "orange")
+        
+        # 尝试重新检测连接状态
+        self.is_connected = self._check_connection()
+        
+        if self.is_connected:
+            self._show_connected_state()
+            self.update_status("传感器已连接", "green")
+            # 重置显示值
+            self.update_all(
+                current_values=(0.0, 0.0, 0.0),
+                peak_values=(0.0, 0.0, 0.0),
+                magnitude=0.0
+            )
+        else:
+            self.update_status("传感器连接失败", "red")
+            # 显示提示对话框
+            import tkinter.messagebox as messagebox
+            messagebox.showwarning(
+                "连接失败",
+                "无法连接到振动传感器。\n\n请检查:\n1. 传感器电源是否开启\n2. 串口连接是否正常\n3. 设备驱动是否安装",
+                parent=self.frame
+            )
     
     def _create_control_panel(self):
         """创建控制面板"""
@@ -377,11 +475,23 @@ class VibrationPanel:
             magnitude: 综合强度值
             status: 状态信息
         """
-        if current_values:
-            self.update_current_values(current_values)
-        if peak_values:
-            self.update_peaks(peak_values)
-        if magnitude is not None:
-            self.update_magnitude(magnitude)
+        # 检查连接状态是否发生变化
+        new_connection_state = self._check_connection()
+        if new_connection_state != self.is_connected:
+            self.is_connected = new_connection_state
+            if self.is_connected:
+                self._show_connected_state()
+            else:
+                self._show_disconnected_state()
+        
+        # 只有在连接状态下才更新数值显示
+        if self.is_connected:
+            if current_values:
+                self.update_current_values(current_values)
+            if peak_values:
+                self.update_peaks(peak_values)
+            if magnitude is not None:
+                self.update_magnitude(magnitude)
+        
         if status:
             self.update_status(status)

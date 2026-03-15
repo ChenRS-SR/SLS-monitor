@@ -31,7 +31,7 @@ import copy
 ADJUSTED_IMAGE_CONFIG = copy.deepcopy(IMAGE_CONFIG)
 ADJUSTED_IMAGE_CONFIG["display_height"] = 180  # 降低图像显示高度
 # 确保热像更新频率配置被正确传递
-print(f"🔧 配置检查: thermal_fps = {ADJUSTED_IMAGE_CONFIG.get('thermal_fps', '未设置')}")
+print(f"[CONFIG] thermal_fps = {ADJUSTED_IMAGE_CONFIG.get('thermal_fps', 'N/A')}")
 from sls_monitor.ui.camera_panel import CameraPanel
 from sls_monitor.ui.thermal_panel import ThermalPanel
 from sls_monitor.ui.control_panel import ControlPanel
@@ -824,8 +824,8 @@ class MainWindow:
         self.params_status.pack(pady=(5, 0))
     
     def _create_device_status_panel(self, parent):
-        """创建设备状态面板"""
-        self.device_status_panel = ttk.LabelFrame(parent, text="设备状态", padding=10)
+        """创建设备状态面板 - 图标化紧凑布局"""
+        self.device_status_panel = ttk.LabelFrame(parent, text="设备状态", padding=5)
         # 应用加粗字体样式
         self.device_status_panel.configure(style='DeviceStatus.TLabelframe')
         self.device_status_panel.grid(row=0, column=1, sticky="nsew", padx=(2, 0), pady=0)
@@ -833,37 +833,78 @@ class MainWindow:
         # 创建设备状态指示器字典
         self.status_indicators = {}
         
-        # 为每个设备创建状态指示器
-        for device_name, device in self.devices.items():
-            indicator = self._create_status_indicator(
+        # 设备图标映射
+        self.device_icons = {
+            'camera': '📷',
+            'secondary_camera': '📹',
+            'thermal': '🌡️',
+            'vibration': '📳'
+        }
+        
+        # 设备显示名称映射
+        self.device_display_names = {
+            'camera': 'Camera',
+            'secondary_camera': 'Secondary',
+            'thermal': 'Thermal',
+            'vibration': 'Vibration'
+        }
+        
+        # 创建2x2网格布局
+        self.device_status_panel.grid_columnconfigure(0, weight=1)
+        self.device_status_panel.grid_columnconfigure(1, weight=1)
+        
+        row = 0
+        col = 0
+        for device_name in self.devices.keys():
+            indicator = self._create_compact_status_indicator(
                 self.device_status_panel,
-                device_name.replace('_', ' ').title()
+                device_name
             )
             self.status_indicators[device_name] = indicator
+            indicator['frame'].grid(row=row, column=col, sticky="w", padx=5, pady=2)
+            
+            col += 1
+            if col > 1:
+                col = 0
+                row += 1
     
-    def _create_status_indicator(self, parent, name):
-        """创建设备状态指示器"""
+    def _create_compact_status_indicator(self, parent, device_name):
+        """创建紧凑的设备状态指示器"""
         frame = ttk.Frame(parent)
-        frame.pack(side=tk.TOP, fill=tk.X, padx=5, pady=2)
         
-        label = ttk.Label(frame, text=f"{name}:")
-        label.pack(side=tk.LEFT)
+        icon = self.device_icons.get(device_name, '❓')
+        display_name = self.device_display_names.get(device_name, device_name.replace('_', ' ').title())
         
-        status = ttk.Label(frame, text="未连接")
-        status.pack(side=tk.RIGHT)
+        # 图标标签
+        icon_label = ttk.Label(frame, text=icon, font=('Arial', 12))
+        icon_label.pack(side=tk.LEFT, padx=(0, 3))
         
-        return status
+        # 设备名称标签
+        name_label = ttk.Label(frame, text=display_name, font=('Arial', 9))
+        name_label.pack(side=tk.LEFT, padx=(0, 5))
+        
+        # 状态圆点标签
+        status_label = ttk.Label(frame, text='⚪', font=('Arial', 10))
+        status_label.pack(side=tk.LEFT)
+        
+        return {
+            'frame': frame,
+            'icon_label': icon_label,
+            'name_label': name_label,
+            'status_label': status_label
+        }
     
     def _start_device_status_update(self):
         """启动设备状态更新循环"""
         self._update_device_status()
     
     def _update_device_status(self):
-        """更新设备状态显示"""
+        """更新设备状态显示 - 图标化紧凑布局"""
         if hasattr(self, 'status_indicators'):
             for device_name, device in self.devices.items():
                 if device_name in self.status_indicators:
                     indicator = self.status_indicators[device_name]
+                    status_label = indicator['status_label']
                     
                     # 检查设备连接状态
                     try:
@@ -874,51 +915,48 @@ class MainWindow:
                         elif hasattr(device, 'connected'):
                             # Thermal设备使用connected属性
                             is_connected = device.connected
-                            # 添加调试信息
-                            #if device_name == 'thermal':
-                            #    print(f"[DEBUG] Thermal设备状态: connected={device.connected}, simulation_mode={getattr(device, 'simulation_mode', '未知')}")
                         else:
                             is_connected = False
                         
-                        # 根据连接状态和设备类型显示不同信息
+                        # 确定状态类型和对应的颜色圆点
+                        status_type = 'disconnected'  # 默认未连接
+                        
                         if is_connected:
-                            # 特殊处理振动设备，显示更多信息
-                            if device_name == 'vibration':
-                                try:
-                                    magnitude = device.vibration_magnitude
-                                    indicator.config(text=f"正常 ({magnitude:.3f})", foreground="green")
-                                except:
-                                    indicator.config(text="已连接", foreground="green")
-                            # 特殊处理thermal设备，区分真实连接和仿真模式
-                            elif device_name == 'thermal':
-                                try:
-                                    if hasattr(device, 'simulation_mode') and device.simulation_mode:
-                                        indicator.config(text="仿真模式", foreground="orange")
-                                    else:
-                                        indicator.config(text="已连接", foreground="green")
-                                except:
-                                    indicator.config(text="已连接", foreground="green")
+                            # 检查是否为仿真/调试模式
+                            is_simulation = False
+                            if device_name == 'thermal' and hasattr(device, 'simulation_mode') and device.simulation_mode:
+                                is_simulation = True
+                            elif device_name == 'vibration' and hasattr(device, 'debug_mode') and device.debug_mode:
+                                is_simulation = True
+                            
+                            if is_simulation:
+                                status_type = 'simulation'
                             else:
-                                indicator.config(text="已连接", foreground="green")
+                                status_type = 'connected'
                         else:
                             # 振动设备即使未连接也可以使用调试模式
                             if device_name == 'vibration':
-                                indicator.config(text="调试模式", foreground="orange")
-                            # thermal设备如果处于仿真模式，显示不同状态
-                            elif device_name == 'thermal':
-                                try:
-                                    if hasattr(device, 'simulation_mode') and device.simulation_mode:
-                                        indicator.config(text="仿真模式", foreground="orange")
-                                    else:
-                                        indicator.config(text="未连接", foreground="gray")
-                                except:
-                                    indicator.config(text="未连接", foreground="gray")
+                                status_type = 'simulation'
+                            # thermal设备如果处于仿真模式
+                            elif device_name == 'thermal' and hasattr(device, 'simulation_mode') and device.simulation_mode:
+                                status_type = 'simulation'
                             else:
-                                indicator.config(text="未连接", foreground="gray")
-                                
+                                status_type = 'disconnected'
+                        
+                        # 根据状态类型设置颜色圆点
+                        status_dots = {
+                            'connected': '🟢',    # 已连接/正常 - 绿色
+                            'simulation': '🟡',   # 仿真模式/调试模式 - 橙色
+                            'disconnected': '⚪',  # 未连接 - 灰色
+                            'error': '🔴'         # 错误 - 红色
+                        }
+                        
+                        status_dot = status_dots.get(status_type, '⚪')
+                        status_label.config(text=status_dot)
+                        
                     except Exception as e:
                         print(f"设备{device_name}状态检查失败: {str(e)}")
-                        indicator.config(text="异常", foreground="red")
+                        status_label.config(text='🔴')  # 错误状态
         
         # 每2秒更新一次设备状态，减少频繁查询
         if not self.is_shutting_down:
