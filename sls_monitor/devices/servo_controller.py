@@ -17,7 +17,7 @@ import json
 import os
 import gc  # 垃圾回收
 import atexit  # 程序退出时清理
-import subprocess  # 用于强制释放串口
+import sys  # 用于重启Python解释器
 from typing import Optional
 
 # 配置文件路径
@@ -41,6 +41,48 @@ def _cleanup_all_servos():
 
 # 注册程序退出时的清理函数
 atexit.register(_cleanup_all_servos)
+
+
+def reset_serial_port_windows(port: str) -> bool:
+    """
+    尝试使用Windows命令重置串口
+    
+    Args:
+        port: 串口号 (如 'COM13')
+        
+    Returns:
+        bool: 是否成功
+    """
+    import subprocess
+    import re
+    
+    try:
+        # 提取数字部分
+        port_num = re.search(r'\d+', port)
+        if not port_num:
+            return False
+        port_num = port_num.group()
+        
+        print(f"[RESET] 尝试重置串口 {port}...")
+        
+        # 方法1: 使用 mode 命令重置串口
+        try:
+            result = subprocess.run(
+                ['mode', port, 'BAUD=9600', 'PARITY=n', 'DATA=8', 'STOP=1'],
+                capture_output=True,
+                timeout=5
+            )
+            if result.returncode == 0:
+                print(f"[RESET] mode 命令成功")
+                return True
+        except Exception as e:
+            print(f"[RESET] mode 命令失败: {e}")
+        
+        return False
+        
+    except Exception as e:
+        print(f"[RESET] 重置串口失败: {e}")
+        return False
 
 
 def load_config():
@@ -143,12 +185,21 @@ class ServoController:
                 error_msg = str(e)
                 if "系统资源不足" in error_msg or "OSError(22" in error_msg:
                     print(f"✗ 连接失败 (尝试 {attempt + 1}): 系统资源不足")
+                    
+                    # 尝试重置串口
+                    if attempt < max_retries - 1:
+                        print(f"  尝试重置串口...")
+                        reset_serial_port_windows(self.port)
+                        time.sleep(2.0)  # 重置后等待
+                    
                     if attempt == max_retries - 1:
                         print(f"\n  ❌ 系统资源未释放")
-                        print(f"  解决方案:")
-                        print(f"  1. 重启 Python 解释器")
-                        print(f"  2. 重启计算机")
+                        print(f"  这是 Windows + ROBOIDE 硬件的已知问题")
+                        print(f"  解决方案（按优先级）:")
+                        print(f"  1. [推荐] 使用 SLS 主程序，不要单独测试舵机")
+                        print(f"  2. 重启 Python 解释器（关闭所有Python窗口）")
                         print(f"  3. 拔插USB设备")
+                        print(f"  4. 重启计算机")
                 else:
                     print(f"✗ 连接失败 (尝试 {attempt + 1}): {e}")
                     if attempt == max_retries - 1:
