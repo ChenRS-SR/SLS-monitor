@@ -1597,6 +1597,11 @@ class ControlPanel:
     
     def _start_continuous_sampling(self):
         """开始连续采样"""
+        # 如果设置为不采样，直接返回
+        if self.sampling_interval <= 0:
+            self._log("ℹ️ 连续采样已禁用（采样间隔=0）")
+            return
+        
         if self.continuous_sampling:
             return  # 已经在采样中
             
@@ -1644,11 +1649,17 @@ class ControlPanel:
                 new_interval = freq_map[freq_text]
                 self.sampling_interval = new_interval
                 
-                # 计算频率
-                new_freq = 1.0 / new_interval
-                old_freq = 1.0 / old_interval
-                
-                self._log(f"🎛️ 采样频率已更新: {old_freq:.1f}Hz → {new_freq:.1f}Hz (间隔: {old_interval}s → {new_interval}s)")
+                # 处理不采样的情况
+                if new_interval <= 0:
+                    self._log("🛑 采样频率已设置为: 不采样")
+                    # 如果正在采样，停止它
+                    if self.continuous_sampling:
+                        self._stop_continuous_sampling()
+                else:
+                    # 计算频率
+                    new_freq = 1.0 / new_interval
+                    old_freq = 1.0 / old_interval if old_interval > 0 else 0
+                    self._log(f"🎛️ 采样频率已更新: {old_freq:.1f}Hz → {new_freq:.1f}Hz")
                 
                 # 更新按钮显示应用成功
                 self.apply_sampling_button.config(text="✓ 已应用")
@@ -1725,14 +1736,13 @@ class ControlPanel:
                     if self.test_mode.get():
                         # 在before拍摄前停止上一层的连续采样
                         self._stop_continuous_sampling()
-                        log_info(f"[简单模式] 测试模式: 模拟拍摄before图像 - 层{self.current_layer.get()}", "STATE_MACHINE")
+                        print(f"📷 [简单模式] 测试模式: 模拟拍摄before图像 - 层{self.current_layer.get()}")
                         self._log(f"[简单模式] 测试模式: 模拟拍摄before图像 - 层{self.current_layer.get()}")
                     else:
                         # 在before拍摄前停止上一层的连续采样
                         self._stop_continuous_sampling()
                         self._capture_before_images()
                     
-                    log_info(f"[简单模式] 状态转换: idle -> motion (强度: {magnitude:.3f})", "STATE_MACHINE")
                     print(f"🟢 [简单模式] 状态转换: idle -> motion (强度: {magnitude:.3f})")
                     self._log(f"🟢 [简单模式] 检测到刮刀运动: 层{self.current_layer.get()}")
                     self.recording_status.config(text=f"检测到刮刀运动: 层{self.current_layer.get()}")
@@ -1741,7 +1751,7 @@ class ControlPanel:
                     # idle 状态下不需要主动初始化舵机，会在拍摄时自动控制
                     
                     if not hasattr(self, '_last_simple_log') or current_time - self._last_simple_log > 10.0:
-                        log_debug(f"[简单模式] 等待刮刀运动: 强度={magnitude:.3f}", "STATE_MACHINE")
+                        self._log(f"[简单模式] 等待刮刀运动: 强度={magnitude:.3f}")
                         print(f"⭕ [简单模式] 等待刮刀运动...")
                         self._last_simple_log = current_time
                         
@@ -1753,7 +1763,6 @@ class ControlPanel:
                 if is_triggered:
                     # 仍在运动中，更新触发时间
                     self.last_trigger_time = current_time
-                    log_debug(f"[简单模式] 刮刀运动持续中，触发强度={magnitude:.3f}", "STATE_MACHINE")
                     self._log(f"🔄 [简单模式] 运动持续中，强度={magnitude:.3f}")
                 else:
                     # 检查是否稳定停止
@@ -1765,7 +1774,7 @@ class ControlPanel:
                     if time_since_last > self.debounce_time:
                         # 拍摄after图像并完成层循环
                         if self.test_mode.get():
-                            log_info(f"[简单模式] 测试模式: 模拟拍摄after图像 - 层{self.current_layer.get()}", "STATE_MACHINE")
+                            print(f"📷 [简单模式] 测试模式: 模拟拍摄after图像 - 层{self.current_layer.get()}")
                             self._log(f"[简单模式] 测试模式: 模拟拍摄after图像 - 层{self.current_layer.get()}")
                         else:
                             self._capture_after_images()
@@ -1776,8 +1785,7 @@ class ControlPanel:
                         # 更新UI显示为idle状态
                         self.motion_state_label.config(text="idle", foreground="green")
                         
-                        log_info(f"[简单模式] 状态转换: motion -> idle (停止时间: {time_since_last:.2f}s)", "STATE_MACHINE")
-                        print(f"🔵 [简单模式] 状态转换: motion -> idle (完成层)")
+                        print(f"🔵 [简单模式] 状态转换: motion -> idle (停止时间: {time_since_last:.2f}s, 完成层)")
                         self._log(f"🔵 [简单模式] 刮刀运动完成，进入下一层")
                         self._complete_layer_cycle()
                         
@@ -1806,21 +1814,20 @@ class ControlPanel:
                     if self.test_mode.get():
                         # 在before拍摄前停止上一层的连续采样
                         self._stop_continuous_sampling()
-                        log_info(f"[复杂模式] 测试模式: 模拟拍摄before图像 - 层{self.current_layer.get()}", "STATE_MACHINE")
+                        print(f"📷 [复杂模式] 测试模式: 模拟拍摄before图像 - 层{self.current_layer.get()}")
                         self._log(f"[复杂模式] 测试模式: 模拟拍摄before图像 - 层{self.current_layer.get()}")
                     else:
                         # 在before拍摄前停止上一层的连续采样
                         self._stop_continuous_sampling()
                         self._capture_before_images()
                     
-                    log_info(f"[复杂模式] 状态转换: idle -> first_motion (强度: {magnitude:.3f})", "STATE_MACHINE")
-                    print(f"🟢 [复杂模式] 状态转换: idle -> first_motion")
+                    print(f"🟢 [复杂模式] 状态转换: idle -> first_motion (强度: {magnitude:.3f})")
                     self._log(f"🟢 [复杂模式] 检测到第一次运动: 层{self.current_layer.get()}")
                     self.recording_status.config(text=f"检测到第一次运动: 层{self.current_layer.get()}")
                 else:
                     # 等待振动触发
                     if not hasattr(self, '_last_complex_log') or current_time - self._last_complex_log > 10.0:
-                        log_debug(f"[复杂模式] 等待第一次运动: 强度={magnitude:.3f}", "STATE_MACHINE")
+                        self._log(f"[复杂模式] 等待第一次运动: 强度={magnitude:.3f}")
                         print(f"⭕ [复杂模式] 等待第一次运动...")
                         self._last_complex_log = current_time
                         
@@ -1830,17 +1837,14 @@ class ControlPanel:
                 self._log(f"[复杂模式] first_motion状态: is_triggered={is_triggered}, magnitude={magnitude:.3f}")
                 if is_triggered:
                     self.last_trigger_time = current_time
-                    log_debug(f"[复杂模式] 第一次运动持续中", "STATE_MACHINE")
                 else:
                     time_since_last = current_time - self.last_trigger_time
-                    log_debug(f"[复杂模式] 第一次运动停止检查: 停止时间={time_since_last:.2f}s", "STATE_MACHINE")
                     if time_since_last > self.debounce_time:
                         self.motion_state = "between_motions"
                         
                         # 更新UI显示
                         self.motion_state_label.config(text="between_motions", foreground="blue")
                         
-                        log_info(f"[复杂模式] 状态转换: first_motion -> between_motions", "STATE_MACHINE")
                         print(f"🟡 [复杂模式] 状态转换: first_motion -> between_motions")
                         self._log(f"第一次运动结束，等待第二次运动")
                         self.recording_status.config(text=f"等待第二次运动: 层{self.current_layer.get()}")
@@ -1857,14 +1861,13 @@ class ControlPanel:
                     # 更新UI显示
                     self.motion_state_label.config(text="second_motion", foreground="red")
                     
-                    log_info(f"[复杂模式] 状态转换: between_motions -> second_motion", "STATE_MACHINE")
                     print(f"🟠 [复杂模式] 状态转换: between_motions -> second_motion")
                     self._log(f"检测到第二次运动")
                     self.recording_status.config(text=f"检测到第二次运动: 层{self.current_layer.get()}")
                     
                 elif (current_time - self.first_motion_start_time) > self.between_motions_timeout:
                     # 超时，直接完成
-                    log_warning(f"[复杂模式] between_motions超时，直接完成", "STATE_MACHINE")
+                    print(f"⚠️ [复杂模式] between_motions超时，直接完成")
                     if self.test_mode.get():
                         self._log(f"[复杂模式] 测试模式: 超时模拟拍摄after图像")
                     else:
@@ -1884,14 +1887,12 @@ class ControlPanel:
                 self._log(f"[复杂模式] second_motion状态: is_triggered={is_triggered}, magnitude={magnitude:.3f}")
                 if is_triggered:
                     self.last_trigger_time = current_time
-                    log_debug(f"[复杂模式] 第二次运动持续中", "STATE_MACHINE")
                 else:
                     time_since_last = current_time - self.last_trigger_time
-                    log_debug(f"[复杂模式] 第二次运动停止检查: 停止时间={time_since_last:.2f}s", "STATE_MACHINE")
                     if time_since_last > self.second_motion_settle_time:
                         # 拍摄after图像并完成层循环
                         if self.test_mode.get():
-                            log_info(f"[复杂模式] 测试模式: 模拟拍摄after图像", "STATE_MACHINE")
+                            print(f"📷 [复杂模式] 测试模式: 模拟拍摄after图像")
                             self._log(f"[复杂模式] 测试模式: 模拟拍摄after图像")
                         else:
                             self._capture_after_images()
@@ -1902,7 +1903,6 @@ class ControlPanel:
                         # 更新UI显示为idle状态
                         self.motion_state_label.config(text="idle", foreground="green")
                         
-                        log_info(f"[复杂模式] 状态转换: second_motion -> idle", "STATE_MACHINE")
                         print(f"🔵 [复杂模式] 状态转换: second_motion -> idle (完成层)")
                         self._complete_layer_cycle()
                         
@@ -2010,7 +2010,7 @@ class ControlPanel:
                 
                 # 记录模式切换
                 mode_names = {"simple": "简单模式(单向刮刀)", "complex": "复杂模式(双向刮刀)"}
-                log_info(f"状态机模式切换: {mode_names.get(old_mode, old_mode)} → {mode_names.get(new_mode, new_mode)}", "STATE_MACHINE")
+                print(f"🔄 状态机模式切换: {mode_names.get(old_mode, old_mode)} → {mode_names.get(new_mode, new_mode)}")
                 self._log(f"状态机模式切换为: {mode_names.get(new_mode, new_mode)}")
                 
                 # 更新界面显示

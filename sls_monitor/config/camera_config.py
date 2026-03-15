@@ -6,7 +6,7 @@ Camera configuration settings
 CAMERA_CONFIG = {
     "main_camera_index": 0,    # 主摄像头索引
     "main_camera_enabled": True,  # 是否启用主摄像头
-    "secondary_camera_index": 2,  # 副摄像头索引（根据扫描结果更新）
+    "secondary_camera_index": 1,  # 副摄像头索引（根据扫描结果更新）
     "secondary_camera_enabled": True,  # 是否启用副摄像头
     "fps": 30                  # 帧率
 }
