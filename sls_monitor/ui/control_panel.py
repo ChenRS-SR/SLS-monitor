@@ -1559,7 +1559,7 @@ class ControlPanel:
         ch1_path = os.path.join(ch1_dir, filename)
         os.makedirs(ch1_dir, exist_ok=True)
         self._log(f"📷 CH1 target: {ch1_path}")
-        if 'camera' in self.devices and getattr(self.devices['camera'], 'isOpen', False):
+        if 'camera' in self.devices and getattr(self.devices['camera'], 'is_connected', False):
             result = self.devices['camera'].save_frame(ch1_dir, f"{layer_str}_{phase}_{timestamp}")
             if result:
                 self._log(f"✅ CH1 saved to: {result}")
@@ -1576,7 +1576,7 @@ class ControlPanel:
         ch2_path = os.path.join(ch2_dir, filename)
         os.makedirs(ch2_dir, exist_ok=True)
         self._log(f"📷 CH2 target: {ch2_path}")
-        if 'secondary_camera' in self.devices and getattr(self.devices['secondary_camera'], 'isOpen', False):
+        if 'secondary_camera' in self.devices and getattr(self.devices['secondary_camera'], 'is_connected', False):
             result = self.devices['secondary_camera'].save_frame(ch2_dir, f"{layer_str}_{phase}_{timestamp}")
             if result:
                 self._log(f"✅ CH2 saved to: {result}")
