@@ -14,6 +14,15 @@ import cv2
 import numpy as np
 from datetime import datetime
 from sls_monitor.config.system_config import DEFAULT_PARAMS, DEFAULT_SAVE_PATH_CONFIG
+from sls_monitor.config.servo_config import SERVO_CONFIG, SERVO_POSITION
+
+# 尝试导入舵机控制器
+try:
+    from ..devices.servo_controller import ServoController
+    SERVO_AVAILABLE = True
+except ImportError:
+    SERVO_AVAILABLE = False
+    print("警告: servo_controller模块未找到，舵机功能不可用")
 
 # 尝试导入日志系统，如果失败则使用占位函数
 try:
@@ -103,8 +112,9 @@ class ControlPanel:
         # main_data.csv记录相关
         self.main_data_records = []       # 主数据记录列表
         
-        # main_data.csv记录相关
-        self.main_data_records = []       # 主数据记录列表
+        # 舵机控制器
+        self.servo_controller = None      # 舵机控制器实例
+        self.servo_config = SERVO_CONFIG.copy()  # 舵机配置
         
         # 初始化UI组件
         self._init_ui()
@@ -348,6 +358,9 @@ class ControlPanel:
         # 记录状态显示
         self.recording_status = ttk.Label(recording_frame, text="未记录")
         self.recording_status.pack(side=tk.RIGHT, padx=5)
+        
+        # 添加舵机控制区域
+        self._create_servo_control_panel()
         
         # 添加振动监测区域
         debug_frame = ttk.LabelFrame(self.frame, text="振动监测")
@@ -1374,25 +1387,24 @@ class ControlPanel:
         thread.start()
     
     def _capture_before_images(self):
-        """拍摄before图像（刮刀运动开始时）"""
+        """拍摄before图像（刮刀运动开始时）
+        
+        流程:
+        1. 先移动舵机到开启位置(2500)，不遮挡红外摄像头
+        2. 等待舵机到位
+        3. 拍摄所有通道图像
+        """
         try:
             from datetime import datetime
             import os
-            from ..devices.IR_protection import move_servo_to_2500
             
-            # 打开摄像头
-            try:
-                self._log("📹 正在打开摄像头舵机...")
-                move_servo_to_2500()
-                self._log("✓ 摄像头舵机打开成功")
-            except Exception as servo_err:
-                self._log(f"⚠ 摄像头舵机打开失败: {servo_err}")
-                print(f"❌ 舵机错误: {servo_err}")
+            # 第1步: 开启舵机（不遮挡红外）
+            self._open_servo()
             
+            # 第2步: 拍摄图像
             current_layer_str = f"L{int(self.current_layer.get()):04d}"
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S_%f")[:-3]  # 添加毫秒精度
             
-            # 为每个通道拍摄图像 - 异步执行
             self.recording_status.config(text=f"拍摄before: 层{self.current_layer.get()}")
             self._async_capture_images(current_layer_str, "before", timestamp)
             
@@ -1400,29 +1412,25 @@ class ControlPanel:
             self._log(f"拍摄before图像失败: {str(e)}")
     
     def _capture_after_images(self):
-        """拍摄after图像（刮刀运动结束时）"""
+        """拍摄after图像（刮刀运动结束时）
+        
+        流程:
+        1. 先拍摄所有通道图像
+        2. 然后移动舵机到关闭位置(1500)，遮挡红外摄像头
+        """
         try:
             from datetime import datetime
             import os
-            from ..devices.IR_protection import move_servo_to_1500
             
+            # 第1步: 拍摄图像
             current_layer_str = f"L{int(self.current_layer.get()):04d}"
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S_%f")[:-3]  # 添加毫秒精度
             
-            # 为每个通道拍摄图像 - 异步执行
             self.recording_status.config(text=f"拍摄after: 层{self.current_layer.get()}")
             self._async_capture_images(current_layer_str, "after", timestamp)
             
-            # 关闭摄像头 - 单次尝试，失败时输出错误但不中断
-            try:
-                self._log("📹 正在关闭摄像头舵机...")
-                result = move_servo_to_1500()
-                if result:
-                    self._log("✓ 摄像头舵机关闭成功")
-                else:
-                    self._log("⚠ 摄像头舵机关闭失败（单次尝试）")
-            except Exception as servo_err:
-                self._log(f"⚠ 摄像头舵机关闭异常: {servo_err}")
+            # 第2步: 关闭舵机（遮挡红外）
+            self._close_servo()
             
         except Exception as e:
             self._log(f"拍摄after图像失败: {str(e)}")
@@ -1540,6 +1548,147 @@ class ControlPanel:
         except Exception as e:
             self._log(f"❌ 捕获热像仪图像时发生异常: {type(e).__name__}: {e}")
             return False
+
+    def _create_servo_control_panel(self):
+        """创建舵机控制面板"""
+        servo_frame = ttk.LabelFrame(self.frame, text="舵机控制")
+        servo_frame.configure(style='Bold.TLabelframe')
+        servo_frame.pack(side=tk.TOP, fill=tk.X, padx=5, pady=5)
+        
+        # 启用/禁用复选框
+        self.servo_enabled = tk.BooleanVar(value=self.servo_config["enabled"])
+        enable_check = ttk.Checkbutton(
+            servo_frame, 
+            text="启用舵机控制", 
+            variable=self.servo_enabled,
+            command=self._on_servo_enable_change
+        )
+        enable_check.pack(side=tk.LEFT, padx=5)
+        
+        # 串口选择
+        ttk.Label(servo_frame, text="串口:").pack(side=tk.LEFT, padx=(10, 2))
+        self.servo_port = tk.StringVar(value=self.servo_config["port"])
+        port_entry = ttk.Entry(servo_frame, textvariable=self.servo_port, width=8)
+        port_entry.pack(side=tk.LEFT, padx=2)
+        
+        # 应用按钮
+        apply_btn = ttk.Button(
+            servo_frame, 
+            text="应用设置", 
+            command=self._apply_servo_config
+        )
+        apply_btn.pack(side=tk.LEFT, padx=5)
+        
+        # 测试按钮
+        test_frame = ttk.Frame(servo_frame)
+        test_frame.pack(side=tk.RIGHT, padx=5)
+        
+        open_btn = ttk.Button(
+            test_frame, 
+            text="开启(2500)", 
+            command=lambda: self._move_servo_to(2500),
+            bg="#4CAF50",
+            fg="white"
+        )
+        open_btn.pack(side=tk.LEFT, padx=2)
+        
+        close_btn = ttk.Button(
+            test_frame, 
+            text="关闭(1500)", 
+            command=lambda: self._move_servo_to(1500),
+            bg="#f44336",
+            fg="white"
+        )
+        close_btn.pack(side=tk.LEFT, padx=2)
+        
+        # 状态显示
+        self.servo_status = ttk.Label(servo_frame, text="未连接", foreground="gray")
+        self.servo_status.pack(side=tk.RIGHT, padx=10)
+
+    def _on_servo_enable_change(self):
+        """舵机启用状态改变回调"""
+        self.servo_config["enabled"] = self.servo_enabled.get()
+        self._log(f"{'启用' if self.servo_enabled.get() else '禁用'}舵机控制")
+
+    def _apply_servo_config(self):
+        """应用舵机配置"""
+        self.servo_config["port"] = self.servo_port.get()
+        self.servo_config["enabled"] = self.servo_enabled.get()
+        self._log(f"舵机配置已应用: 串口={self.servo_port.get()}, 启用={self.servo_enabled.get()}")
+
+    def _init_servo_controller(self):
+        """初始化舵机控制器"""
+        if not SERVO_AVAILABLE or not self.servo_config.get("enabled", False):
+            return False
+        
+        try:
+            if self.servo_controller is None:
+                self.servo_controller = ServoController(
+                    port=self.servo_config["port"],
+                    baudrate=self.servo_config["baudrate"]
+                )
+            if not self.servo_controller.is_connected:
+                if self.servo_controller.connect():
+                    self.servo_status.config(text="已连接", foreground="green")
+                    self._log(f"✅ 舵机控制器已连接: {self.servo_config['port']}")
+                    return True
+                else:
+                    self.servo_status.config(text="连接失败", foreground="red")
+                    self._log(f"❌ 舵机控制器连接失败: {self.servo_config['port']}")
+                    return False
+            return True
+        except Exception as e:
+            self.servo_status.config(text="错误", foreground="red")
+            self._log(f"❌ 舵机控制器初始化失败: {e}")
+            return False
+
+    def _move_servo_to(self, position):
+        """移动舵机到指定位置
+        
+        Args:
+            position: 目标位置 (1500=关闭/遮挡, 2500=开启/不遮挡)
+        """
+        if not self.servo_config.get("enabled", False):
+            self._log("ℹ️ 舵机控制已禁用")
+            return False
+        
+        if not SERVO_AVAILABLE:
+            self._log("❌ 舵机模块不可用")
+            return False
+        
+        # 初始化控制器
+        if not self._init_servo_controller():
+            return False
+        
+        try:
+            servo_id = self.servo_config.get("servo_id", 1)
+            duration = self.servo_config.get("duration", 500)
+            wait = self.servo_config.get("wait", True)
+            
+            position_name = "开启" if position == 2500 else "关闭"
+            self._log(f"🎯 舵机移动到{position_name}位置: {position}")
+            
+            self.servo_controller.move_servo_to_position(
+                servo_id=servo_id,
+                position=position,
+                duration=duration,
+                wait=wait
+            )
+            
+            self._log(f"✅ 舵机已移动到{position_name}位置: {position}")
+            return True
+            
+        except Exception as e:
+            self._log(f"❌ 舵机移动失败: {e}")
+            return False
+
+    def _open_servo(self):
+        """开启舵机 (2500位置，不遮挡红外)"""
+        return self._move_servo_to(SERVO_POSITION["open"])
+
+    def _close_servo(self):
+        """关闭舵机 (1500位置，遮挡红外)"""
+        return self._move_servo_to(SERVO_POSITION["closed"])
 
     def _capture_channel_images_sync(self, layer_str, phase, timestamp):
         """为所有通道拍摄图像"""

@@ -29,7 +29,7 @@ def load_config():
                 return json.load(f)
         except:
             pass
-    return {'port': 'COM8', 'baudrate': 9600}
+    return {'port': 'COM16', 'baudrate': 9600}
 
 
 def save_config(port: str, baudrate: int = 9600):
@@ -46,7 +46,7 @@ def save_config(port: str, baudrate: int = 9600):
 class ServoController:
     """ROBOIDE舵机控制类"""
     
-    def __init__(self, port: str = 'COM8', baudrate: int = 9600):
+    def __init__(self, port: str = 'COM16', baudrate: int = 9600):
         """
         初始化串口连接
         
@@ -224,7 +224,7 @@ class ServoController:
 
 
 # 接口函数
-def create_servo_controller(port: str = 'COM8') -> ServoController:
+def create_servo_controller(port: str = 'COM16') -> ServoController:
     """
     创建并返回舵机控制器实例
     
@@ -239,7 +239,7 @@ def create_servo_controller(port: str = 'COM8') -> ServoController:
     return controller
 
 
-def test_servo_motion(servo_id: int = 1, port: str = 'COM8') -> None:
+def test_servo_motion(servo_id: int = 1, port: str = 'COM16') -> None:
     """
     测试舵机摆臂动作
     
@@ -277,8 +277,8 @@ def test_servo_motion(servo_id: int = 1, port: str = 'COM8') -> None:
         controller.move_servo_to_position(servo_id, 2500, duration=1000, wait=True)
         
         # 回到1500 (耗时1000ms)
-        print("\n[阶段3] 舵机摆臂回到中间位置 (1500)")
-        controller.move_servo_to_position(servo_id, 1500, duration=1000, wait=True)
+        #print("\n[阶段3] 舵机摆臂回到中间位置 (1500)")
+        #controller.move_servo_to_position(servo_id, 1500, duration=1000, wait=True)
         
         print("\n✓ 测试完成！")
         
