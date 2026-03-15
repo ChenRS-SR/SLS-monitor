@@ -123,6 +123,9 @@ class ControlPanel:
         
         # 初始化时同步阈值到设备
         self._sync_threshold_to_device(self.motion_threshold)
+        
+        # 初始化时应用默认采样频率（根据界面默认值"不采样"）
+        self._apply_sampling_frequency()
 
         # 日志节流配置（防止高频刷屏）
         self._log_last_times = {}
