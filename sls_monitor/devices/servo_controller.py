@@ -103,33 +103,43 @@ class ServoController:
     def disconnect(self) -> None:
         """断开串口连接"""
         import time
+        
+        if not self.ser:
+            print(f"ℹ️ 串口未初始化，无需断开")
+            return
+            
         try:
-            if self.ser:
-                if self.ser.is_open:
-                    # 多次尝试清空缓冲区
-                    for attempt in range(3):
-                        try:
-                            self.ser.reset_input_buffer()
-                            self.ser.reset_output_buffer()
-                            time.sleep(0.1)
-                        except Exception as e:
-                            if attempt == 0:
-                                print(f"  清空缓冲区尝试{attempt+1}: {e}")
-                    
-                    # 等待一下，让数据完全发送
-                    time.sleep(0.2)
-                    self.ser.close()
-                    
-                self.ser = None  # 清空引用，确保完全释放
-            self.is_connected = False
-            print(f"✓ 已断开 {self.port}")
+            if self.ser.is_open:
+                # 多次尝试清空缓冲区
+                for attempt in range(3):
+                    try:
+                        self.ser.reset_input_buffer()
+                        self.ser.reset_output_buffer()
+                        time.sleep(0.1)
+                    except Exception as e:
+                        if attempt == 0:
+                            print(f"  清空缓冲区尝试{attempt+1}: {e}")
+                
+                # 等待一下，让数据完全发送
+                time.sleep(0.2)
+                
+                # 关闭串口
+                self.ser.close()
+                print(f"✓ 串口已关闭 {self.port}")
         except Exception as e:
-            print(f"✗ 断开连接时出错: {e}")
-            self.ser = None
+            print(f"✗ 关闭串口时出错: {e}")
+        finally:
+            # 无论如何都要清空引用
+            try:
+                self.ser = None
+            except:
+                pass
             self.is_connected = False
         
         # 关键：给Windows充足的时间释放串口资源
-        time.sleep(1.5)  # 1.5秒平衡：避免卡顿但给COM完整释放时间
+        print(f"⏳ 等待Windows释放串口资源...")
+        time.sleep(2.0)  # 增加到2秒，确保完全释放
+        print(f"✓ 断开完成")
     
     def send_command(self, command: str) -> bool:
         """
@@ -232,10 +242,15 @@ def create_servo_controller(port: str = 'COM16') -> ServoController:
         port: 串口名称
         
     Returns:
-        ServoController: 舵机控制器实例
+        ServoController: 舵机控制器实例（连接可能成功或失败，请检查 is_connected）
     """
     controller = ServoController(port=port)
-    controller.connect()
+    # 尝试连接，但不强制要求成功
+    # 调用者应该检查 controller.is_connected
+    try:
+        controller.connect()
+    except Exception as e:
+        print(f"⚠️ create_servo_controller: 连接失败 - {e}")
     return controller
 
 
@@ -250,42 +265,59 @@ def test_servo_motion(servo_id: int = 1, port: str = 'COM16') -> None:
     
     Args:
         servo_id: 舵机ID (默认为1)
-        port: 串口名称 (默认COM8)
+        port: 串口名称 (默认COM16)
     """
+    import time
+    
     print("=" * 50)
     print("ROBOIDE舵机摆臂测试 - 1500 → 2500 → 1500")
     print("=" * 50)
     
-    # 创建控制器
-    controller = create_servo_controller(port)
-    
-    if not controller.is_connected:
-        print("\n✗ 测试失败：无法连接到串口")
-        print(f"\n可能的原因:")
-        print(f"  1. COM口不正确 - 请在设备管理器中查看")
-        print(f"  2. 驱动未安装 - 运行 CH341SER.exe 或 usc_driver.exe")
-        print(f"  3. 设备未连接 - 检查USB连接")
-        return
+    controller = None
     
     try:
+        # 创建控制器
+        print(f"\n[连接] 正在连接舵机控制器: {port}")
+        controller = ServoController(port=port)
+        
+        if not controller.connect():
+            print("\n✗ 测试失败：无法连接到串口")
+            print(f"\n可能的原因:")
+            print(f"  1. COM口不正确 - 请在设备管理器中查看")
+            print(f"  2. 驱动未安装 - 运行 CH341SER.exe 或 usc_driver.exe")
+            print(f"  3. 设备未连接 - 检查USB连接")
+            print(f"  4. 串口被占用 - 重启Python或检查其他程序")
+            return
+        
         # 初始位置1500 (耗时500ms)
         print("\n[阶段1] 舵机返回中间位置 (1500)")
         controller.move_servo_to_position(servo_id, 1500, duration=500, wait=True)
+        time.sleep(0.5)  # 额外等待确保到位
         
         # 移动到2500 (耗时1000ms)
         print("\n[阶段2] 舵机摆臂到位置 (2500)")
         controller.move_servo_to_position(servo_id, 2500, duration=1000, wait=True)
-        
-        # 回到1500 (耗时1000ms)
-        #print("\n[阶段3] 舵机摆臂回到中间位置 (1500)")
-        #controller.move_servo_to_position(servo_id, 1500, duration=1000, wait=True)
+        time.sleep(0.5)  # 额外等待确保到位
         
         print("\n✓ 测试完成！")
         
     except KeyboardInterrupt:
-        print("\n✗ 测试被中断")
+        print("\n✗ 测试被用户中断")
+    except Exception as e:
+        print(f"\n✗ 测试出错: {e}")
+        import traceback
+        traceback.print_exc()
     finally:
-        controller.disconnect()
+        # 确保断开连接
+        if controller:
+            print("\n[清理] 正在断开舵机连接...")
+            try:
+                controller.disconnect()
+                print("✓ 舵机连接已断开")
+            except Exception as e:
+                print(f"⚠️ 断开连接时出错: {e}")
+        else:
+            print("\nℹ️ 控制器未创建，无需断开")
 
 
 if __name__ == '__main__':
