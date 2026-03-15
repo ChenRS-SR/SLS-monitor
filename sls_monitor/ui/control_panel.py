@@ -1583,21 +1583,25 @@ class ControlPanel:
         test_frame = ttk.Frame(servo_frame)
         test_frame.pack(side=tk.RIGHT, padx=5)
         
-        open_btn = ttk.Button(
+        open_btn = tk.Button(
             test_frame, 
             text="开启(2500)", 
             command=lambda: self._move_servo_to(2500),
             bg="#4CAF50",
-            fg="white"
+            fg="white",
+            relief=tk.RAISED,
+            bd=2
         )
         open_btn.pack(side=tk.LEFT, padx=2)
         
-        close_btn = ttk.Button(
+        close_btn = tk.Button(
             test_frame, 
             text="关闭(1500)", 
             command=lambda: self._move_servo_to(1500),
             bg="#f44336",
-            fg="white"
+            fg="white",
+            relief=tk.RAISED,
+            bd=2
         )
         close_btn.pack(side=tk.LEFT, padx=2)
         

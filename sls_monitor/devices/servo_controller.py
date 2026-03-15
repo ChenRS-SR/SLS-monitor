@@ -48,7 +48,7 @@ def reset_serial_port_windows(port: str) -> bool:
     尝试使用Windows命令重置串口
     
     Args:
-        port: 串口号 (如 'COM13')
+        port: 串口号 (如 'COM16')
         
     Returns:
         bool: 是否成功
@@ -93,7 +93,7 @@ def load_config():
                 return json.load(f)
         except:
             pass
-    return {'port': 'COM13', 'baudrate': 9600}
+    return {'port': 'COM16', 'baudrate': 9600}
 
 
 def save_config(port: str, baudrate: int = 9600):
@@ -110,12 +110,12 @@ def save_config(port: str, baudrate: int = 9600):
 class ServoController:
     """ROBOIDE舵机控制类"""
     
-    def __init__(self, port: str = 'COM13', baudrate: int = 9600):
+    def __init__(self, port: str = 'COM16', baudrate: int = 9600):
         """
         初始化串口连接
         
         Args:
-            port: 串口名称 (默认COM13)
+            port: 串口名称 (默认COM16)
             baudrate: 波特率 (ROBOIDE默认9600)
         """
         self.port = port
@@ -370,7 +370,7 @@ class ServoController:
 
 
 # 接口函数
-def create_servo_controller(port: str = 'COM13') -> ServoController:
+def create_servo_controller(port: str = 'COM16') -> ServoController:
     """
     创建并返回舵机控制器实例
     
@@ -390,7 +390,7 @@ def create_servo_controller(port: str = 'COM13') -> ServoController:
     return controller
 
 
-def test_servo_motion(servo_id: int = 1, port: str = 'COM13') -> None:
+def test_servo_motion(servo_id: int = 1, port: str = 'COM16') -> None:
     """
     测试舵机摆臂动作
     

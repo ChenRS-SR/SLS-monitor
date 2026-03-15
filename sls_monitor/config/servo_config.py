@@ -12,7 +12,7 @@ SERVO_POSITION = {
 # 默认配置
 SERVO_CONFIG = {
     "enabled": True,           # 是否启用舵机控制
-    "port": "COM13",           # 串口号，可在界面中修改
+    "port": "COM16",           # 串口号，可在界面中修改
     "baudrate": 9600,          # 波特率
     "servo_id": 1,             # 舵机ID
     "duration": 500,           # 运动耗时(ms)
