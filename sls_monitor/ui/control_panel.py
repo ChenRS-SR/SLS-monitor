@@ -141,18 +141,24 @@ class ControlPanel:
         self._log_last_times = {}
         # 关键模式 -> 最小打印间隔(秒) - 大幅增加间隔减少刷屏
         self._log_min_intervals = {
-            "热像更新间隔": 10.0,  # 从1.0秒增加到10.0秒
-            "数据读取失败": 5.0,   # 从2.0秒增加到5.0秒  
-            "振动触发检查": 10.0,  # 从1.0秒增加到10.0秒
-            "成功解析温度快照": 60.0,  # 改为60秒，大幅减少刷屏
-            "成功获取全分辨率温度矩阵": 60.0,  # 改为60秒，大幅减少刷屏
-            "[简单模式] idle状态": 10.0,  # 状态机循环检测日志节流
-            "[简单模式] motion状态": 10.0,
-            "[简单模式] 运动停止检查": 10.0,
-            "[复杂模式] idle状态": 10.0,
-            "[复杂模式] first_motion状态": 10.0,
-            "[复杂模式] between_motions状态": 10.0,
-            "[复杂模式] second_motion状态": 10.0,
+            "热像更新间隔": 10.0,
+            "数据读取失败": 5.0,
+            "振动触发检查": 10.0,
+            "成功解析温度快照": 60.0,
+            "成功获取全分辨率温度矩阵": 60.0,
+            # 状态机循环检测日志 - 大幅增加间隔避免刷屏
+            "[简单模式] idle状态": 30.0,
+            "[简单模式] motion状态": 30.0,
+            "[简单模式] 运动停止检查": 30.0,
+            "[复杂模式] idle状态": 30.0,
+            "[复杂模式] first_motion状态": 30.0,
+            "[复杂模式] between_motions状态": 30.0,
+            "[复杂模式] second_motion状态": 30.0,
+            # 高频状态机检查日志
+            "状态机检查": 10.0,
+            "状态机运行": 10.0,
+            "等待稳定停止": 5.0,
+            "运动持续中": 5.0,
         }
 
         # 错误去重相关变量
@@ -948,13 +954,15 @@ class ControlPanel:
         if hasattr(self, 'vibration_debug_text'):
             self.add_debug_log(message)
         
-        # 2. 输出到终端
+        # 2. 输出到终端（只输出一次）
         print(formatted_message)
         
-        # 3. 输出到日志文件（如果日志系统可用）
+        # 3. 输出到日志文件（不输出到终端，避免重复）
         try:
             from ..utils.logger import log_info
-            log_info(message, "CONTROL")
+            # 使用 debug 级别输出到文件，避免重复显示在终端
+            from ..utils.logger import log_debug
+            log_debug(message, "CONTROL")
         except Exception:
             pass  # 日志系统不可用时忽略
     
