@@ -1324,6 +1324,11 @@ class MainWindow:
                 if hasattr(self.control_panel, 'recording') and self.control_panel.recording:
                     self.control_panel._stop_recording()
                     log_info("已停止录制任务", "MAIN_WINDOW")
+                
+                # 断开舵机控制器
+                if hasattr(self.control_panel, 'disconnect_servo'):
+                    self.control_panel.disconnect_servo()
+                    log_info("已断开舵机控制器", "MAIN_WINDOW")
             
             # 保存日志并关闭日志系统
             log_info("程序正常退出，保存日志文件", "MAIN_WINDOW")

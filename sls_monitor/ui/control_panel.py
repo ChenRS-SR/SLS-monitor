@@ -1676,10 +1676,22 @@ class ControlPanel:
             )
             
             self._log(f"✅ 舵机已移动到{position_name}位置: {position}")
+            
+            # 移动完成后断开连接，释放串口
+            self._log("📹 舵机移动完成，断开串口连接...")
+            self.servo_controller.disconnect()
+            self.servo_status.config(text="已断开", foreground="gray")
+            
             return True
             
         except Exception as e:
             self._log(f"❌ 舵机移动失败: {e}")
+            # 发生错误时也尝试断开连接
+            try:
+                if self.servo_controller:
+                    self.servo_controller.disconnect()
+            except:
+                pass
             return False
 
     def _open_servo(self):
@@ -1689,6 +1701,20 @@ class ControlPanel:
     def _close_servo(self):
         """关闭舵机 (1500位置，遮挡红外)"""
         return self._move_servo_to(SERVO_POSITION["closed"])
+
+    def disconnect_servo(self):
+        """断开舵机控制器连接
+        
+        在程序退出时调用，确保串口正确释放
+        """
+        if self.servo_controller and self.servo_controller.is_connected:
+            try:
+                self._log("📹 正在断开舵机控制器...")
+                self.servo_controller.disconnect()
+                self._log("✅ 舵机控制器已断开")
+            except Exception as e:
+                print(f"⚠️ 断开舵机控制器时出错: {e}")
+        self.servo_controller = None
 
     def _capture_channel_images_sync(self, layer_str, phase, timestamp):
         """为所有通道拍摄图像"""
