@@ -1,0 +1,19 @@
+红外图像处理效果查看说明
+==============================
+
+📁 文件说明:
+• original_thermal_data.npy - 原始温度数据
+• recommended_*.jpg - 推荐的处理效果
+• 其他.jpg文件 - 所有组合的处理效果
+• 测试报告.txt - 详细测试信息
+
+🔍 查看建议:
+1. 先查看 recommended_*.jpg 了解推荐效果
+2. 根据需要查看具体组合的效果
+3. 图像左上角显示处理参数和温度范围
+4. 文件名格式: 分辨率_插值方法_滤波方法.jpg (英文命名)
+
+📊 效果对比重点:
+• 分辨率: 1x(原始) vs 2x vs 4x
+• 插值: nearest(锐利) vs linear(平衡) vs cubic(平滑) vs lanczos(高质量)
+• 滤波: none(原始) vs gaussian(平滑) vs median(去噪) vs bilateral(保边缘)

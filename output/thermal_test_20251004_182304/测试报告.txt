@@ -1,0 +1,106 @@
+红外图像处理效果对比测试报告
+==================================================
+
+测试时间: 2025-10-04 18:23:05
+原始数据: (62, 80)
+温度范围: 17.8°C 到 35.9°C
+生成图像: 72 张
+
+分辨率选项:
+  1x: 80x62
+  2x: 160x124
+  4x: 320x248
+插值方法:
+  nearest: 最近邻
+  linear: 双线性
+  cubic: 双三次
+  lanczos: Lanczos
+
+滤波方法:
+  none: 无滤波
+  gaussian: 高斯模糊
+  median: 中值滤波
+  bilateral: 双边滤波
+  mean: 均值滤波
+  morphology: 形态学滤波
+
+推荐组合:
+  1. 2x + 双线性 + 高斯模糊: 平衡质量和性能，推荐日常使用
+  2. 4x + 双三次 + 双边滤波: 最佳视觉效果，适合详细分析
+  3. 4x + Lanczos + 无滤波: 高清锐利，适合边缘检测
+  4. 2x + 双线性 + 中值滤波: 去噪效果好，适合噪声环境
+  5. 1x + 最近邻 + 无滤波: 原始数据，适合数据分析
+
+所有生成的文件列表:
+  1x_nearest_none.jpg (6.3KB, 80x62)
+  1x_nearest_gaussian.jpg (4.9KB, 80x62)
+  1x_nearest_median.jpg (5.0KB, 80x62)
+  1x_nearest_bilateral.jpg (5.8KB, 80x62)
+  1x_nearest_mean.jpg (4.7KB, 80x62)
+  1x_nearest_morphology.jpg (5.3KB, 80x62)
+  1x_linear_none.jpg (6.3KB, 80x62)
+  1x_linear_gaussian.jpg (4.9KB, 80x62)
+  1x_linear_median.jpg (5.0KB, 80x62)
+  1x_linear_bilateral.jpg (5.8KB, 80x62)
+  1x_linear_mean.jpg (4.7KB, 80x62)
+  1x_linear_morphology.jpg (5.3KB, 80x62)
+  1x_cubic_none.jpg (6.3KB, 80x62)
+  1x_cubic_gaussian.jpg (4.9KB, 80x62)
+  1x_cubic_median.jpg (5.0KB, 80x62)
+  1x_cubic_bilateral.jpg (5.8KB, 80x62)
+  1x_cubic_mean.jpg (4.7KB, 80x62)
+  1x_cubic_morphology.jpg (5.3KB, 80x62)
+  1x_lanczos_none.jpg (6.3KB, 80x62)
+  1x_lanczos_gaussian.jpg (4.9KB, 80x62)
+  1x_lanczos_median.jpg (5.0KB, 80x62)
+  1x_lanczos_bilateral.jpg (5.8KB, 80x62)
+  1x_lanczos_mean.jpg (4.7KB, 80x62)
+  1x_lanczos_morphology.jpg (5.3KB, 80x62)
+  2x_nearest_none.jpg (22.5KB, 160x124)
+  2x_nearest_gaussian.jpg (17.1KB, 160x124)
+  2x_nearest_median.jpg (17.6KB, 160x124)
+  2x_nearest_bilateral.jpg (20.5KB, 160x124)
+  2x_nearest_mean.jpg (15.2KB, 160x124)
+  2x_nearest_morphology.jpg (19.7KB, 160x124)
+  2x_linear_none.jpg (18.4KB, 160x124)
+  2x_linear_gaussian.jpg (15.9KB, 160x124)
+  2x_linear_median.jpg (15.5KB, 160x124)
+  2x_linear_bilateral.jpg (16.2KB, 160x124)
+  2x_linear_mean.jpg (14.5KB, 160x124)
+  2x_linear_morphology.jpg (17.7KB, 160x124)
+  2x_cubic_none.jpg (20.1KB, 160x124)
+  2x_cubic_gaussian.jpg (16.8KB, 160x124)
+  2x_cubic_median.jpg (16.2KB, 160x124)
+  2x_cubic_bilateral.jpg (18.1KB, 160x124)
+  2x_cubic_mean.jpg (14.9KB, 160x124)
+  2x_cubic_morphology.jpg (19.1KB, 160x124)
+  2x_lanczos_none.jpg (20.3KB, 160x124)
+  2x_lanczos_gaussian.jpg (16.9KB, 160x124)
+  2x_lanczos_median.jpg (16.1KB, 160x124)
+  2x_lanczos_bilateral.jpg (18.3KB, 160x124)
+  2x_lanczos_mean.jpg (14.8KB, 160x124)
+  2x_lanczos_morphology.jpg (19.4KB, 160x124)
+  4x_nearest_none.jpg (63.8KB, 320x248)
+  4x_nearest_gaussian.jpg (50.2KB, 320x248)
+  4x_nearest_median.jpg (65.8KB, 320x248)
+  4x_nearest_bilateral.jpg (58.0KB, 320x248)
+  4x_nearest_mean.jpg (44.9KB, 320x248)
+  4x_nearest_morphology.jpg (68.1KB, 320x248)
+  4x_linear_none.jpg (46.6KB, 320x248)
+  4x_linear_gaussian.jpg (42.2KB, 320x248)
+  4x_linear_median.jpg (42.4KB, 320x248)
+  4x_linear_bilateral.jpg (39.9KB, 320x248)
+  4x_linear_mean.jpg (38.2KB, 320x248)
+  4x_linear_morphology.jpg (47.2KB, 320x248)
+  4x_cubic_none.jpg (51.3KB, 320x248)
+  4x_cubic_gaussian.jpg (46.5KB, 320x248)
+  4x_cubic_median.jpg (48.6KB, 320x248)
+  4x_cubic_bilateral.jpg (46.6KB, 320x248)
+  4x_cubic_mean.jpg (41.9KB, 320x248)
+  4x_cubic_morphology.jpg (53.2KB, 320x248)
+  4x_lanczos_none.jpg (52.1KB, 320x248)
+  4x_lanczos_gaussian.jpg (47.0KB, 320x248)
+  4x_lanczos_median.jpg (50.0KB, 320x248)
+  4x_lanczos_bilateral.jpg (48.2KB, 320x248)
+  4x_lanczos_mean.jpg (42.4KB, 320x248)
+  4x_lanczos_morphology.jpg (54.6KB, 320x248)
