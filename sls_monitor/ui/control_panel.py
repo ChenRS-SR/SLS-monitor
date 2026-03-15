@@ -1616,34 +1616,59 @@ class ControlPanel:
         self.servo_config["enabled"] = self.servo_enabled.get()
         self._log(f"舵机配置已应用: 串口={self.servo_port.get()}, 启用={self.servo_enabled.get()}")
 
-    def _init_servo_controller(self):
-        """初始化舵机控制器"""
+    def _init_servo_controller(self, max_retries=3):
+        """初始化舵机控制器（带重试）
+        
+        Args:
+            max_retries: 最大重试次数
+        """
         if not SERVO_AVAILABLE or not self.servo_config.get("enabled", False):
             return False
         
-        try:
-            if self.servo_controller is None:
-                self.servo_controller = ServoController(
-                    port=self.servo_config["port"],
-                    baudrate=self.servo_config["baudrate"]
-                )
-            if not self.servo_controller.is_connected:
-                if self.servo_controller.connect():
-                    self.servo_status.config(text="已连接", foreground="green")
-                    self._log(f"✅ 舵机控制器已连接: {self.servo_config['port']}")
-                    return True
+        for attempt in range(max_retries):
+            try:
+                # 如果控制器不存在，创建新的
+                if self.servo_controller is None:
+                    self.servo_controller = ServoController(
+                        port=self.servo_config["port"],
+                        baudrate=self.servo_config["baudrate"]
+                    )
+                
+                # 如果未连接，尝试连接
+                if not self.servo_controller.is_connected:
+                    self._log(f"🔄 尝试连接舵机控制器 (尝试 {attempt + 1}/{max_retries})...")
+                    
+                    if self.servo_controller.connect(max_retries=1):  # 内部不重试，我们外部重试
+                        self.servo_status.config(text="已连接", foreground="green")
+                        self._log(f"✅ 舵机控制器已连接: {self.servo_config['port']}")
+                        return True
+                    else:
+                        # 连接失败，等待后重试
+                        if attempt < max_retries - 1:
+                            wait_time = 3.0 + attempt * 2  # 3秒, 5秒, 7秒...
+                            self._log(f"⏳ 连接失败，等待 {wait_time} 秒后重试...")
+                            import time
+                            time.sleep(wait_time)
                 else:
-                    self.servo_status.config(text="连接失败", foreground="red")
-                    self._log(f"❌ 舵机控制器连接失败: {self.servo_config['port']}")
-                    return False
-            return True
-        except Exception as e:
-            self.servo_status.config(text="错误", foreground="red")
-            self._log(f"❌ 舵机控制器初始化失败: {e}")
-            return False
+                    # 已经连接
+                    return True
+                    
+            except Exception as e:
+                self._log(f"⚠️ 舵机控制器初始化出错 (尝试 {attempt + 1}): {e}")
+                if attempt < max_retries - 1:
+                    time.sleep(3.0)
+        
+        # 所有重试都失败
+        self.servo_status.config(text="连接失败", foreground="red")
+        self._log(f"❌ 舵机控制器连接失败（已重试{max_retries}次）: {self.servo_config['port']}")
+        self._log(f"💡 建议: 1) 检查USB连接 2) 重启程序 3) 重启计算机")
+        return False
 
     def _move_servo_to(self, position):
         """移动舵机到指定位置
+        
+        策略: 程序启动时连接，保持连接，程序退出时才断开
+        避免频繁连接/断开导致Windows资源无法释放
         
         Args:
             position: 目标位置 (1500=关闭/遮挡, 2500=开启/不遮挡)
@@ -1656,7 +1681,7 @@ class ControlPanel:
             self._log("❌ 舵机模块不可用")
             return False
         
-        # 初始化控制器
+        # 初始化控制器（如果未连接）
         if not self._init_servo_controller():
             return False
         
@@ -1677,21 +1702,13 @@ class ControlPanel:
             
             self._log(f"✅ 舵机已移动到{position_name}位置: {position}")
             
-            # 移动完成后断开连接，释放串口
-            self._log("📹 舵机移动完成，断开串口连接...")
-            self.servo_controller.disconnect()
-            self.servo_status.config(text="已断开", foreground="gray")
+            # 注意：不断开连接，保持连接状态，避免频繁连接/断开
+            # 程序退出时才调用 disconnect_servo() 断开
             
             return True
             
         except Exception as e:
             self._log(f"❌ 舵机移动失败: {e}")
-            # 发生错误时也尝试断开连接
-            try:
-                if self.servo_controller:
-                    self.servo_controller.disconnect()
-            except:
-                pass
             return False
 
     def _open_servo(self):

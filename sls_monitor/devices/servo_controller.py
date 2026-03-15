@@ -16,10 +16,31 @@ import time
 import json
 import os
 import gc  # 垃圾回收
+import atexit  # 程序退出时清理
+import subprocess  # 用于强制释放串口
 from typing import Optional
 
 # 配置文件路径
 CONFIG_FILE = os.path.join(os.path.dirname(__file__), 'config_servo.json')
+
+# 全局串口实例列表，用于程序退出时强制清理
+_global_servo_controllers = []
+
+def _cleanup_all_servos():
+    """程序退出时强制清理所有串口"""
+    print("\n[CLEANUP] 程序退出，强制清理所有舵机串口...")
+    for controller in _global_servo_controllers:
+        try:
+            controller.force_disconnect()
+        except:
+            pass
+    # 强制垃圾回收
+    gc.collect()
+    time.sleep(0.5)
+    print("[CLEANUP] 清理完成")
+
+# 注册程序退出时的清理函数
+atexit.register(_cleanup_all_servos)
 
 
 def load_config():
@@ -30,7 +51,7 @@ def load_config():
                 return json.load(f)
         except:
             pass
-    return {'port': 'COM16', 'baudrate': 9600}
+    return {'port': 'COM13', 'baudrate': 9600}
 
 
 def save_config(port: str, baudrate: int = 9600):
@@ -47,18 +68,21 @@ def save_config(port: str, baudrate: int = 9600):
 class ServoController:
     """ROBOIDE舵机控制类"""
     
-    def __init__(self, port: str = 'COM16', baudrate: int = 9600):
+    def __init__(self, port: str = 'COM13', baudrate: int = 9600):
         """
         初始化串口连接
         
         Args:
-            port: 串口名称 (默认COM8)
+            port: 串口名称 (默认COM13)
             baudrate: 波特率 (ROBOIDE默认9600)
         """
         self.port = port
         self.baudrate = baudrate
         self.ser: Optional[serial.Serial] = None
         self.is_connected = False
+        
+        # 注册到全局列表，确保程序退出时能被清理
+        _global_servo_controllers.append(self)
         
     def connect(self, max_retries: int = 3) -> bool:
         """
@@ -153,7 +177,7 @@ class ServoController:
             if self.ser.is_open:
                 # 发送停止命令（让舵机停止当前动作）
                 try:
-                    self.ser.write(b'#1P1500T100\r\n')  # 回到中间位置
+                    #self.ser.write(b'#1P1500T100\r\n')  # 回到中间位置
                     time.sleep(0.1)
                 except:
                     pass
@@ -295,7 +319,7 @@ class ServoController:
 
 
 # 接口函数
-def create_servo_controller(port: str = 'COM16') -> ServoController:
+def create_servo_controller(port: str = 'COM13') -> ServoController:
     """
     创建并返回舵机控制器实例
     
@@ -315,7 +339,7 @@ def create_servo_controller(port: str = 'COM16') -> ServoController:
     return controller
 
 
-def test_servo_motion(servo_id: int = 1, port: str = 'COM16') -> None:
+def test_servo_motion(servo_id: int = 1, port: str = 'COM13') -> None:
     """
     测试舵机摆臂动作
     
