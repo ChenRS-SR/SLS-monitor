@@ -133,6 +133,13 @@ class ControlPanel:
             "振动触发检查": 10.0,  # 从1.0秒增加到10.0秒
             "成功解析温度快照": 60.0,  # 改为60秒，大幅减少刷屏
             "成功获取全分辨率温度矩阵": 60.0,  # 改为60秒，大幅减少刷屏
+            "[简单模式] idle状态": 10.0,  # 状态机循环检测日志节流
+            "[简单模式] motion状态": 10.0,
+            "[简单模式] 运动停止检查": 10.0,
+            "[复杂模式] idle状态": 10.0,
+            "[复杂模式] first_motion状态": 10.0,
+            "[复杂模式] between_motions状态": 10.0,
+            "[复杂模式] second_motion状态": 10.0,
         }
 
         # 错误去重相关变量
@@ -1541,7 +1548,7 @@ class ControlPanel:
         ch1_path = os.path.join(ch1_dir, filename)
         os.makedirs(ch1_dir, exist_ok=True)
         self._log(f"📷 CH1 target: {ch1_path}")
-        if 'camera' in self.devices and self.devices['camera'].is_connected:
+        if 'camera' in self.devices and getattr(self.devices['camera'], 'isOpen', False):
             result = self.devices['camera'].save_frame(ch1_dir, f"{layer_str}_{phase}_{timestamp}")
             if result:
                 self._log(f"✅ CH1 saved to: {result}")
@@ -1558,7 +1565,7 @@ class ControlPanel:
         ch2_path = os.path.join(ch2_dir, filename)
         os.makedirs(ch2_dir, exist_ok=True)
         self._log(f"📷 CH2 target: {ch2_path}")
-        if 'secondary_camera' in self.devices and self.devices['secondary_camera'].is_connected:
+        if 'secondary_camera' in self.devices and getattr(self.devices['secondary_camera'], 'isOpen', False):
             result = self.devices['secondary_camera'].save_frame(ch2_dir, f"{layer_str}_{phase}_{timestamp}")
             if result:
                 self._log(f"✅ CH2 saved to: {result}")
@@ -1704,7 +1711,8 @@ class ControlPanel:
         try:
             if self.motion_state == "idle":
                 # 等待运动开始
-                log_debug(f"[简单模式] idle状态: is_triggered={is_triggered}, magnitude={magnitude:.3f}", "STATE_MACHINE")
+                # 使用_log进行节流，每10秒最多输出一次
+                self._log(f"[简单模式] idle状态: is_triggered={is_triggered}, magnitude={magnitude:.3f}")
                 
                 if is_triggered:
                     self.motion_state = "motion"
@@ -1739,7 +1747,8 @@ class ControlPanel:
                         
             elif self.motion_state == "motion":
                 # 运动中，等待停止
-                log_debug(f"[简单模式] motion状态: is_triggered={is_triggered}, magnitude={magnitude:.3f}", "STATE_MACHINE")
+                # 使用_log进行节流，每10秒最多输出一次
+                self._log(f"[简单模式] motion状态: is_triggered={is_triggered}, magnitude={magnitude:.3f}")
                 
                 if is_triggered:
                     # 仍在运动中，更新触发时间
@@ -1749,7 +1758,8 @@ class ControlPanel:
                 else:
                     # 检查是否稳定停止
                     time_since_last = current_time - self.last_trigger_time
-                    log_debug(f"[简单模式] 运动停止检查: 停止时间={time_since_last:.2f}s, 需要={self.debounce_time}s", "STATE_MACHINE")
+                    # 使用_log进行节流，每10秒最多输出一次
+                    self._log(f"[简单模式] 运动停止检查: 停止时间={time_since_last:.2f}s, 需要={self.debounce_time}s")
                     self._log(f"⏱️ [简单模式] 等待稳定停止: {time_since_last:.2f}s / {self.debounce_time}s")
                     
                     if time_since_last > self.debounce_time:
@@ -1780,7 +1790,8 @@ class ControlPanel:
         try:
             if self.motion_state == "idle":
                 # 等待第一次振动（刮刀开始运动）
-                log_debug(f"[复杂模式] idle状态: is_triggered={is_triggered}, magnitude={magnitude:.3f}", "STATE_MACHINE")
+                # 使用_log进行节流，每10秒最多输出一次
+                self._log(f"[复杂模式] idle状态: is_triggered={is_triggered}, magnitude={magnitude:.3f}")
                 
                 if is_triggered:
                     self.motion_state = "first_motion"
@@ -1815,7 +1826,8 @@ class ControlPanel:
                         
             elif self.motion_state == "first_motion":
                 # 第一次运动中，等待振动停止
-                log_debug(f"[复杂模式] first_motion状态: is_triggered={is_triggered}, magnitude={magnitude:.3f}", "STATE_MACHINE")
+                # 使用_log进行节流，每10秒最多输出一次
+                self._log(f"[复杂模式] first_motion状态: is_triggered={is_triggered}, magnitude={magnitude:.3f}")
                 if is_triggered:
                     self.last_trigger_time = current_time
                     log_debug(f"[复杂模式] 第一次运动持续中", "STATE_MACHINE")
@@ -1835,7 +1847,8 @@ class ControlPanel:
                         
             elif self.motion_state == "between_motions":
                 # 在两次运动之间等待第二次振动
-                log_debug(f"[复杂模式] between_motions状态: is_triggered={is_triggered}, magnitude={magnitude:.3f}", "STATE_MACHINE")
+                # 使用_log进行节流，每10秒最多输出一次
+                self._log(f"[复杂模式] between_motions状态: is_triggered={is_triggered}, magnitude={magnitude:.3f}")
                 if is_triggered:
                     self.motion_state = "second_motion"
                     self.second_motion_detected = True
@@ -1867,7 +1880,8 @@ class ControlPanel:
                     
             elif self.motion_state == "second_motion":
                 # 第二次运动中，等待振动停止
-                log_debug(f"[复杂模式] second_motion状态: is_triggered={is_triggered}, magnitude={magnitude:.3f}", "STATE_MACHINE")
+                # 使用_log进行节流，每10秒最多输出一次
+                self._log(f"[复杂模式] second_motion状态: is_triggered={is_triggered}, magnitude={magnitude:.3f}")
                 if is_triggered:
                     self.last_trigger_time = current_time
                     log_debug(f"[复杂模式] 第二次运动持续中", "STATE_MACHINE")

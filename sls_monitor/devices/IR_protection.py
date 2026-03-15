@@ -3,7 +3,12 @@
 使用ROBOIDE舵机控制板，波特率9600
 """
 
-from servo_controller import ServoController, test_servo_motion
+try:
+    from .servo_controller import ServoController, test_servo_motion
+    SERVO_AVAILABLE = True
+except ImportError:
+    SERVO_AVAILABLE = False
+    print("警告: servo_controller模块未找到，舵机功能不可用")
 
 # 全局配置
 SERIAL_PORT = 'COM13'  # 默认串口，可通过参数修改
@@ -74,6 +79,10 @@ def move_servo_to_1500(servo_id=1, port=None, retry=False):
     Returns:
         bool: 操作是否成功
     """
+    if not SERVO_AVAILABLE:
+        print("警告: 舵机功能不可用，无法执行move_servo_to_1500")
+        return False
+    
     import time
     port = port or SERIAL_PORT
     
@@ -113,6 +122,10 @@ def move_servo_to_2500(servo_id=1, port=None, retry=False):
     Returns:
         bool: 操作是否成功
     """
+    if not SERVO_AVAILABLE:
+        print("警告: 舵机功能不可用，无法执行move_servo_to_2500")
+        return False
+    
     import time
     port = port or SERIAL_PORT
     
