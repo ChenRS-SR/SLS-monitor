@@ -15,6 +15,7 @@ import serial
 import time
 import json
 import os
+import gc  # 垃圾回收
 from typing import Optional
 
 # 配置文件路径
@@ -59,87 +60,147 @@ class ServoController:
         self.ser: Optional[serial.Serial] = None
         self.is_connected = False
         
-    def connect(self) -> bool:
+    def connect(self, max_retries: int = 3) -> bool:
         """
-        建立串口连接
+        建立串口连接（带重试机制）
         
+        Args:
+            max_retries: 最大重试次数（默认3次）
+            
         Returns:
             bool: 连接是否成功
         """
-        import time
-        try:
-            # 在连接前延迟，确保个上一次接口完全四惶
-            time.sleep(0.5)
-            
-            self.ser = serial.Serial(
-                port=self.port,
-                baudrate=self.baudrate,
-                bytesize=serial.EIGHTBITS,      # 8位数据位
-                parity=serial.PARITY_NONE,      # 无校验位
-                stopbits=serial.STOPBITS_ONE,   # 1位停止位
-                timeout=1
-            )
-            self.is_connected = True
-            print(f"✓ 成功连接到 {self.port}，波特率: {self.baudrate}")
-            return True
-        except PermissionError as e:
-            print(f"✗ 连接失败: {e}")
-            print(f"  ❌ 拒绝访问 - COM口已被占用")
-            print(f"  请检查:")
-            print(f"  1. 是否有其他程序占用 {self.port}？(test_servo.py, 串口工具等)")
-            print(f"  2. 前一个连接是否未正确关闭？")
-            print(f"  3. 需要重启 USB 设备或重启计算机")
-            self.is_connected = False
-            return False
-        except serial.SerialException as e:
-            print(f"✗ 连接失败: {e}")
-            print(f"  请检查:")
-            print(f"  1. {self.port} 是否正确？")
-            print(f"  2. 设备是否已连接？")
-            print(f"  3. 驱动程序是否已安装？(CH341SER.exe或usc_driver.exe)")
-            self.is_connected = False
-            return False
+        # 如果已经连接，先断开
+        if self.is_connected and self.ser:
+            print(f"ℹ️ 已经连接，先断开再重新连接...")
+            self.disconnect()
+            time.sleep(1.0)  # 等待释放
+        
+        for attempt in range(max_retries):
+            try:
+                print(f"  连接尝试 {attempt + 1}/{max_retries}...")
+                
+                # 每次尝试前等待，确保资源释放
+                if attempt > 0:
+                    wait_time = 2.0 + attempt  # 递增等待时间
+                    print(f"  等待 {wait_time} 秒后重试...")
+                    time.sleep(wait_time)
+                else:
+                    time.sleep(0.5)  # 首次连接前短暂等待
+                
+                # 强制垃圾回收，帮助释放系统资源
+                gc.collect()
+                
+                self.ser = serial.Serial(
+                    port=self.port,
+                    baudrate=self.baudrate,
+                    bytesize=serial.EIGHTBITS,
+                    parity=serial.PARITY_NONE,
+                    stopbits=serial.STOPBITS_ONE,
+                    timeout=1,
+                    write_timeout=1  # 添加写超时
+                )
+                self.is_connected = True
+                print(f"✓ 成功连接到 {self.port}，波特率: {self.baudrate}")
+                return True
+                
+            except PermissionError as e:
+                print(f"✗ 连接失败 (尝试 {attempt + 1}): 拒绝访问 - COM口被占用")
+                if attempt == max_retries - 1:
+                    print(f"\n  ❌ 无法连接到 {self.port}")
+                    print(f"  可能的原因:")
+                    print(f"  1. 前一个程序未正确释放串口")
+                    print(f"  2. 需要重启 Python 解释器")
+                    print(f"  3. 需要重启计算机")
+                    print(f"  4. 尝试拔插USB设备")
+                self.is_connected = False
+                
+            except serial.SerialException as e:
+                error_msg = str(e)
+                if "系统资源不足" in error_msg or "OSError(22" in error_msg:
+                    print(f"✗ 连接失败 (尝试 {attempt + 1}): 系统资源不足")
+                    if attempt == max_retries - 1:
+                        print(f"\n  ❌ 系统资源未释放")
+                        print(f"  解决方案:")
+                        print(f"  1. 重启 Python 解释器")
+                        print(f"  2. 重启计算机")
+                        print(f"  3. 拔插USB设备")
+                else:
+                    print(f"✗ 连接失败 (尝试 {attempt + 1}): {e}")
+                    if attempt == max_retries - 1:
+                        print(f"\n  请检查:")
+                        print(f"  1. {self.port} 是否正确？")
+                        print(f"  2. 设备是否已连接？")
+                        print(f"  3. 驱动程序是否已安装？")
+                self.is_connected = False
+                
+            except Exception as e:
+                print(f"✗ 连接失败 (尝试 {attempt + 1}): 未知错误 - {e}")
+                self.is_connected = False
+        
+        return False
     
     def disconnect(self) -> None:
-        """断开串口连接"""
-        import time
+        """断开串口连接 - 强制释放版本"""
         
         if not self.ser:
             print(f"ℹ️ 串口未初始化，无需断开")
             return
             
+        port_name = self.port  # 保存端口名，因为后面要清空self.ser
+        
         try:
             if self.ser.is_open:
-                # 多次尝试清空缓冲区
-                for attempt in range(3):
-                    try:
-                        self.ser.reset_input_buffer()
-                        self.ser.reset_output_buffer()
-                        time.sleep(0.1)
-                    except Exception as e:
-                        if attempt == 0:
-                            print(f"  清空缓冲区尝试{attempt+1}: {e}")
+                # 发送停止命令（让舵机停止当前动作）
+                try:
+                    self.ser.write(b'#1P1500T100\r\n')  # 回到中间位置
+                    time.sleep(0.1)
+                except:
+                    pass
                 
-                # 等待一下，让数据完全发送
-                time.sleep(0.2)
+                # 清空缓冲区
+                try:
+                    self.ser.reset_input_buffer()
+                    self.ser.reset_output_buffer()
+                except:
+                    pass
+                
+                time.sleep(0.1)
                 
                 # 关闭串口
-                self.ser.close()
-                print(f"✓ 串口已关闭 {self.port}")
+                try:
+                    self.ser.close()
+                    print(f"✓ 串口已关闭 {port_name}")
+                except Exception as e:
+                    print(f"⚠️ 关闭串口时出错: {e}")
         except Exception as e:
-            print(f"✗ 关闭串口时出错: {e}")
+            print(f"⚠️ 断开连接时出错: {e}")
         finally:
-            # 无论如何都要清空引用
-            try:
-                self.ser = None
-            except:
-                pass
+            # 强制清空所有引用
+            self.ser = None
             self.is_connected = False
+            
+            # 强制垃圾回收，帮助释放系统资源
+            gc.collect()
         
         # 关键：给Windows充足的时间释放串口资源
-        print(f"⏳ 等待Windows释放串口资源...")
-        time.sleep(2.0)  # 增加到2秒，确保完全释放
+        print(f"⏳ 等待系统释放串口资源...")
+        time.sleep(3.0)  # 增加到3秒
         print(f"✓ 断开完成")
+    
+    def force_disconnect(self) -> None:
+        """强制断开连接 - 用于异常情况"""
+        print(f"⚠️ 强制断开串口 {self.port}")
+        try:
+            if self.ser:
+                if hasattr(self.ser, 'close'):
+                    self.ser.close()
+        except:
+            pass
+        finally:
+            self.ser = None
+            self.is_connected = False
+            gc.collect()
     
     def send_command(self, command: str) -> bool:
         """
