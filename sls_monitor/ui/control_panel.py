@@ -910,7 +910,7 @@ class ControlPanel:
         return all_ready
     
     def _log(self, message):
-        """添加日志记录"""
+        """添加日志记录 - 同步输出到界面、终端和日志文件"""
         # 节流判定
         now_ts = time.time()
         suppress = False
@@ -926,10 +926,21 @@ class ControlPanel:
             return
 
         timestamp = datetime.now().strftime("%H:%M:%S")
+        formatted_message = f"[{timestamp}] {message}"
+        
+        # 1. 输出到界面调试框
         if hasattr(self, 'vibration_debug_text'):
             self.add_debug_log(message)
-        else:
-            print(f"[{timestamp}] {message}")
+        
+        # 2. 输出到终端
+        print(formatted_message)
+        
+        # 3. 输出到日志文件（如果日志系统可用）
+        try:
+            from ..utils.logger import log_info
+            log_info(message, "CONTROL")
+        except Exception:
+            pass  # 日志系统不可用时忽略
     
     def _setup_vibration_logging(self):
         """设置振动设备的日志回调"""
